@@ -11,7 +11,7 @@ class NNetworkLayer(
 ) {
     constructor(inputs: Int, outputs: Int) : this(
         weights = Array(outputs) {
-            FloatArray(inputs) { randomFloat0to1() }
+            FloatArray(inputs) { random1m1() }
         },
         //nodeBias = FloatArray(outputs) { randomFloat0to1() }
     )
@@ -34,10 +34,10 @@ fun sigmoid(a: Float): Float = (1f / (1f + exp((-a).toDouble()))).toFloat() // F
 
 fun sigmoidDer(a: Float) = sigmoid(a) * (1 - sigmoid(a))
 
-fun randomFloat0to1() = Random.nextFloat()
+fun random1m1() = Random.nextFloat() * 2 - 1f
 
 class NNetwork(val layers: List<NNetworkLayer>) {
-    val learningRate = -0.1f
+    val learningRate = 0.1f
 
     constructor(vararg shape: Int) : this(
         shape.toList().windowed(2) {
@@ -45,13 +45,14 @@ class NNetwork(val layers: List<NNetworkLayer>) {
         }
     )
 
-    fun eval(inputs: FloatArray) {
+    fun eval(inputs: FloatArray): String {
         var outputs = inputs
         layers.forEachIndexed { index, layer ->
             layer.layerInput = outputs
             layer.eval(index == layers.size - 1)
             outputs = layer.layerOutput
         }
+        return outputs.contentToString()
     }
 
     fun backPropagate(expected: FloatArray) {
@@ -110,13 +111,23 @@ class NNetwork(val layers: List<NNetworkLayer>) {
 }
 
 fun main() {
-    val sampleSize = 30000
-
     val inputSize = 784
     val outputSize = 10
 
-    val samples: Array<FloatArray> = Array(sampleSize) { FloatArray(inputSize) { randomFloat0to1() } }
-    val expected: Array<FloatArray> = Array(sampleSize) { FloatArray(outputSize) { randomFloat0to1() } }
+    val trainingLabels = Idx1uByte("train-labels-idx1-ubyte.gz")
+    val trainingImages = Idx3uByte("train-images-idx3-ubyte.gz")
+
+
+    val samples: Array<FloatArray> = Array(trainingImages.data.size) { sampleIndex ->
+        FloatArray(inputSize) { i ->
+            trainingImages.data[sampleIndex][i / 28][i % 28]
+        }
+    }
+    val expected: Array<FloatArray> = Array(trainingLabels.data.size) {
+        val f = FloatArray(outputSize)
+        f[trainingLabels.data[it].toInt()] = 1f
+        f
+    }
 
     val network = NNetwork(inputSize, 128, 64, outputSize)
     val time = measureTimeMillis {
@@ -134,3 +145,8 @@ fun main() {
 
 }
 
+fun printSample(f: Array<FloatArray>) {
+    f.forEach {
+        println(it.map { if (it > 0.01) '#' else ' ' }.toString())
+    }
+}

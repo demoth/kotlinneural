@@ -7,10 +7,10 @@ import java.util.zip.GZIPInputStream
 fun main() {
     val trainingLabels = Idx1uByte("train-labels-idx1-ubyte.gz")
     check(trainingLabels.data.size == 60000)
-    val testLabels = Idx1uByte("t10k-labels-idx1-ubyte.gz")
-    check(testLabels.data.size == 10000)
     val trainingImages = Idx3uByte("train-images-idx3-ubyte.gz")
     check(trainingImages.data.size == 60000)
+    val testLabels = Idx1uByte("t10k-labels-idx1-ubyte.gz")
+    check(testLabels.data.size == 10000)
     val testImages = Idx3uByte("t10k-images-idx3-ubyte.gz")
     check(testImages.data.size == 10000)
 
