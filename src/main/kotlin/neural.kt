@@ -17,11 +17,11 @@ class NNetworkLayer(
     )
 
 
-    fun eval() {
+    fun eval(lastLayer: Boolean) {
         check(layerInput.size == weights.first().size)
         weights.forEachIndexed { nodeIndex, nodeWeights ->
             activation[nodeIndex] = dotProduct(layerInput, nodeWeights)// + nodeBias[nodeIndex]
-            layerOutput[nodeIndex] = sigmoid(activation[nodeIndex])
+            layerOutput[nodeIndex] = if (!lastLayer) sigmoid(activation[nodeIndex]) else activation[nodeIndex]
         }
     }
 }
@@ -47,57 +47,65 @@ class NNetwork(val layers: List<NNetworkLayer>) {
 
     fun eval(inputs: FloatArray) {
         var outputs = inputs
-        layers.forEach { layer ->
+        layers.forEachIndexed { index, layer ->
             layer.layerInput = outputs
-            layer.eval()
-            outputs = layer.activation
+            layer.eval(index == layers.size - 1)
+            outputs = layer.layerOutput
         }
     }
 
     fun backPropagate(expected: FloatArray) {
-        val actual = layers.last().layerOutput
+        val output = layers.last().layerOutput
         val weightDiff = Array(layers.size) {
             Array(layers[it].weights.size) { k ->
                 FloatArray(layers[it].weights[k].size)
             }
         }
         //
-        var delta = FloatArray(actual.size) { i ->
-            sigmoidDer(layers.last().activation[i]) * (actual[i] - expected[i])
+        var deltaRight = FloatArray(output.size) { i ->
+            output[i] - expected[i]
         }
         //weightDiff[layers.size - 1] = delta
 
-        (layers.size - 1 downTo 1).forEach { k ->
+        (layers.size - 2 downTo 1).forEach { k ->
 
             val layerRight = layers[k + 1]
             val layerLeft = layers[k - 1]
             val layerCurrent = layers[k]
-            val peppersOnLeftLayer = layerLeft.weights.size
-            val peppersOnCurrentLayer = layerCurrent.weights.size
-            val peppersOnRightLayer = layerRight.weights.size
+            val nodesOnLeftLayer = layerLeft.weights.size
+            val nodesOnCurrentLayer = layerCurrent.weights.size
+            val nodesOnRightLayer = layerRight.weights.size
+            val deltaCurrent = FloatArray(layerCurrent.weights.size)
 
-            for (nodeInCurrentLayerIndex in 0 until peppersOnCurrentLayer) {
+            for (nodeInCurrentLayerIndex in 0 until nodesOnCurrentLayer) {
                 var mySum = 0f
 
-                for (nodeInRightLayerIndex in 0 until peppersOnRightLayer) {
+                for (nodeInRightLayerIndex in 0 until nodesOnRightLayer) {
                     val palkaFromCurrentNodeIndex = nodeInCurrentLayerIndex
                     val weightFromCurrentNodeToANodeInTheRightLayer =
                         layerRight.weights[nodeInRightLayerIndex][palkaFromCurrentNodeIndex]
-                    mySum += weightFromCurrentNodeToANodeInTheRightLayer * delta[nodeInRightLayerIndex]
+                    mySum += weightFromCurrentNodeToANodeInTheRightLayer * deltaRight[nodeInRightLayerIndex]
                 }
-
+                // delta = FloatArray(nodesOnCurrentLayer)
                 val currentNodeActivation = layerCurrent.activation[nodeInCurrentLayerIndex]
-                val deltaScalar = mySum * sigmoidDer(currentNodeActivation)
-                delta[nodeInCurrentLayerIndex] = deltaScalar
-                // Fixme use different arrays for delta right and delta current
-                for (palka in 0 until peppersOnLeftLayer) {
-                    var adjustment = (-learningRate) * layerLeft.layerOutput[palka] * deltaScalar
-                    weightDiff[k][nodeInCurrentLayerIndex][palka] = adjustment
+                val deltaScalar = sigmoidDer(currentNodeActivation) * mySum
+                deltaCurrent[nodeInCurrentLayerIndex] = deltaScalar
+                for (leftNodeIndex in 0 until nodesOnLeftLayer) {
+                    val adjustment = (-learningRate) * layerLeft.layerOutput[leftNodeIndex] * deltaScalar
+                    weightDiff[k][nodeInCurrentLayerIndex][leftNodeIndex] = adjustment
                     // we don't update weights here because we'll need old weights on the left layer
                 }
             }
+            deltaRight = deltaCurrent
         }
-        // TODO iterate over weights and apply adjustment
+
+        layers.forEachIndexed { layerIndex, layer ->
+            layer.weights.forEachIndexed { nodeIndex, weights ->
+                for (i in weights.indices) {
+                    weights[i] += weightDiff[layerIndex][nodeIndex][i]
+                }
+            }
+        }
     }
 }
 
